@@ -31,13 +31,13 @@ def index():
 
 def load_page_from_chrome(url):
     """Helper function to load a URL using Chrome and return its content."""
-    # Validate URL scheme
+    # Validate URL scheme first
+    if url.startswith(('javascript:', 'data:', 'file:', 'about:')):
+        raise ValueError('Only http:// and https:// URLs are allowed')
+    
+    # Ensure URL has a scheme
     if not url.startswith(('http://', 'https://')):
         url = 'https://' + url
-    
-    # Validate that it's a valid http(s) URL
-    if not url.startswith(('http://', 'https://')):
-        raise ValueError('Only http:// and https:// URLs are allowed')
     
     # Get browser instance
     browser_instance = get_browser()
@@ -70,8 +70,10 @@ def load_page_from_chrome(url):
             try:
                 tab.stop()
                 browser_instance.close_tab(tab)
-            except Exception:
-                pass  # Ignore cleanup errors
+            except (ConnectionError, RuntimeError):
+                # Log cleanup errors but don't fail the request
+                print(f"Warning: Failed to cleanup tab")
+                pass
 
 
 @app.route('/load_url', methods=['POST'])
@@ -100,7 +102,7 @@ def load_url():
 
 @app.route('/proxy_url')
 def proxy_url():
-    """Proxy a URL for iframe display."""
+    """Proxy a URL for iframe display (alternative endpoint)."""
     url = request.args.get('url')
     if not url:
         return "No URL provided", 400

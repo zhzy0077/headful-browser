@@ -67,15 +67,19 @@ You can configure the application using environment variables:
 
 - `CHROME_DEBUG_HOST`: Chrome debug host (default: `localhost`)
 - `CHROME_DEBUG_PORT`: Chrome debug port (default: `9229`)
-- `FLASK_HOST`: Flask server host (default: `0.0.0.0`)
+- `FLASK_HOST`: Flask server host (default: `127.0.0.1` for local-only access)
 - `FLASK_PORT`: Flask server port (default: `5000`)
+- `FLASK_DEBUG`: Enable Flask debug mode (default: `False`)
 
 Example:
 ```bash
 export CHROME_DEBUG_HOST=192.168.1.100
 export CHROME_DEBUG_PORT=9229
+export FLASK_HOST=0.0.0.0  # Allow external access
 python app.py
 ```
+
+**Security Note**: By default, the Flask server binds to `127.0.0.1` (localhost only) for security. To allow external access, explicitly set `FLASK_HOST=0.0.0.0`.
 
 ## How It Works
 

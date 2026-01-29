@@ -19,6 +19,18 @@
             flex-direction: column;
         }
         
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            margin: -1px;
+            padding: 0;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+        
         .header {
             background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
@@ -161,22 +173,24 @@
         <div class="container">
             <h1>🌐 Headful Browser Proxy</h1>
             <div class="url-form">
+                <label for="url-input" class="visually-hidden">URL to load</label>
                 <input 
                     type="text" 
                     id="url-input" 
                     placeholder="Enter URL (e.g., example.com or https://example.com)"
                     autocomplete="off"
+                    aria-describedby="instructions"
                 >
-                <button id="load-button">Load Page</button>
+                <button id="load-button" aria-label="Load the entered URL">Load Page</button>
             </div>
         </div>
     </div>
     
     <div class="content-area">
-        <div id="status-message" class="status-message" role="status" aria-live="polite"></div>
+        <div id="status-message" class="status-message" role="status" aria-live="polite" aria-atomic="true"></div>
         
         <div id="iframe-container">
-            <iframe id="content-iframe" sandbox="allow-scripts" title="Loaded webpage content"></iframe>
+            <iframe id="content-iframe" sandbox="allow-scripts allow-same-origin allow-forms" title="Loaded webpage content"></iframe>
         </div>
         
         <div id="instructions" class="instructions">
@@ -214,6 +228,7 @@
             
             showStatus('Loading page...', 'loading');
             loadButton.disabled = true;
+            loadButton.setAttribute('aria-busy', 'true');
             instructions.style.display = 'none';
             iframeContainer.classList.remove('visible');
             
@@ -234,6 +249,7 @@
                 if (data.error) {
                     showStatus('Error: ' + data.error, 'error');
                     loadButton.disabled = false;
+                    loadButton.setAttribute('aria-busy', 'false');
                     instructions.style.display = 'block';
                 } else {
                     showStatus('Page loaded successfully!', 'success');
@@ -248,20 +264,18 @@
                     const blob = new Blob([data.content], { type: 'text/html' });
                     const blobUrl = URL.createObjectURL(blob);
                     
-                    // Set iframe source and revoke after load
-                    contentIframe.onload = function() {
-                        // Revoke the blob URL after iframe loads to free memory
-                        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-                    };
+                    // Set iframe source (blob URL will be revoked on next load)
                     contentIframe.src = blobUrl;
                     iframeContainer.classList.add('visible');
                     
                     loadButton.disabled = false;
+                    loadButton.setAttribute('aria-busy', 'false');
                 }
             })
             .catch(error => {
                 showStatus('Error loading page: ' + error.message, 'error');
                 loadButton.disabled = false;
+                loadButton.setAttribute('aria-busy', 'false');
                 instructions.style.display = 'block';
             });
         }
