@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Headful Browser Proxy</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            margin: -1px;
+            padding: 0;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+        
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 2rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .url-form {
+            display: flex;
+            gap: 10px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        #url-input {
+            flex: 1;
+            padding: 15px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            transition: box-shadow 0.3s ease;
+        }
+        
+        #url-input:focus {
+            outline: none;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+        
+        #load-button {
+            padding: 15px 30px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        #load-button:hover {
+            background: #45a049;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            transform: translateY(-2px);
+        }
+        
+        #load-button:active {
+            transform: translateY(0);
+        }
+        
+        #load-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .content-area {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .status-message {
+            max-width: 800px;
+            margin: 0 auto 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 500;
+            display: none;
+        }
+        
+        .status-message.error {
+            background: #f44336;
+            color: white;
+            display: block;
+        }
+        
+        .status-message.success {
+            background: #4CAF50;
+            color: white;
+            display: block;
+        }
+        
+        .status-message.loading {
+            background: #2196F3;
+            color: white;
+            display: block;
+        }
+        
+        #iframe-container {
+            flex: 1;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            display: none;
+        }
+        
+        #iframe-container.visible {
+            display: block;
+        }
+        
+        #content-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        
+        .instructions {
+            max-width: 800px;
+            margin: 0 auto;
+            text-align: center;
+            color: white;
+            font-size: 18px;
+            padding: 40px 20px;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1>🌐 Headful Browser Proxy</h1>
+            <div class="url-form">
+                <label for="url-input" class="visually-hidden">URL to load</label>
+                <input 
+                    type="text" 
+                    id="url-input" 
+                    placeholder="Enter URL (e.g., example.com or https://example.com)"
+                    autocomplete="off"
+                    aria-describedby="instructions"
+                >
+                <button id="load-button" aria-label="Load the entered URL">Load Page</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="content-area">
+        <div id="status-message" class="status-message" role="status" aria-live="polite" aria-atomic="true"></div>
+        
+        <div id="iframe-container">
+            <iframe id="content-iframe" sandbox="allow-scripts allow-same-origin allow-forms" title="Loaded webpage content"></iframe>
+        </div>
+        
+        <div id="instructions" class="instructions">
+            <p>Enter a URL above to load and display it through the remote Chrome instance.</p>
+            <p style="margin-top: 10px; font-size: 14px; opacity: 0.8;">
+                The page will be loaded using Chrome DevTools Protocol and displayed in an iframe.
+            </p>
+        </div>
+    </div>
+    
+    <script>
+        const urlInput = document.getElementById('url-input');
+        const loadButton = document.getElementById('load-button');
+        const statusMessage = document.getElementById('status-message');
+        const iframeContainer = document.getElementById('iframe-container');
+        const contentIframe = document.getElementById('content-iframe');
+        const instructions = document.getElementById('instructions');
+        
+        function showStatus(message, type) {
+            statusMessage.textContent = message;
+            statusMessage.className = 'status-message ' + type;
+        }
+        
+        function hideStatus() {
+            statusMessage.className = 'status-message';
+        }
+        
+        function loadUrl() {
+            const url = urlInput.value.trim();
+            
+            if (!url) {
+                showStatus('Please enter a URL', 'error');
+                return;
+            }
+            
+            showStatus('Loading page...', 'loading');
+            loadButton.disabled = true;
+            loadButton.setAttribute('aria-busy', 'true');
+            instructions.style.display = 'none';
+            iframeContainer.classList.remove('visible');
+            
+            fetch('/load_url', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ url: url })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    showStatus('Error: ' + data.error, 'error');
+                    loadButton.disabled = false;
+                    loadButton.setAttribute('aria-busy', 'false');
+                    instructions.style.display = 'block';
+                } else {
+                    showStatus('Page loaded successfully!', 'success');
+                    setTimeout(() => hideStatus(), 3000);
+                    
+                    // Revoke previous blob URL if exists
+                    if (contentIframe.src && contentIframe.src.startsWith('blob:')) {
+                        URL.revokeObjectURL(contentIframe.src);
+                    }
+                    
+                    // Create a blob URL for the content
+                    const blob = new Blob([data.content], { type: 'text/html' });
+                    const blobUrl = URL.createObjectURL(blob);
+                    
+                    // Set iframe source (blob URL will be revoked on next load)
+                    contentIframe.src = blobUrl;
+                    iframeContainer.classList.add('visible');
+                    
+                    loadButton.disabled = false;
+                    loadButton.setAttribute('aria-busy', 'false');
+                }
+            })
+            .catch(error => {
+                showStatus('Error loading page: ' + error.message, 'error');
+                loadButton.disabled = false;
+                loadButton.setAttribute('aria-busy', 'false');
+                instructions.style.display = 'block';
+            });
+        }
+        
+        loadButton.addEventListener('click', loadUrl);
+        
+        urlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                loadUrl();
+            }
+        });
+    </script>
+</body>
+</html>
