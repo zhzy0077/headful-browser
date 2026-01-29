@@ -29,25 +29,23 @@ def index():
     return render_template('index.html')
 
 
-@app.route('/load_url', methods=['POST'])
-def load_url():
-    """Load a URL in the remote Chrome instance and return the page content."""
+def load_page_from_chrome(url):
+    """Helper function to load a URL using Chrome and return its content."""
+    # Validate URL scheme
+    if not url.startswith(('http://', 'https://')):
+        url = 'https://' + url
+    
+    # Validate that it's a valid http(s) URL
+    if not url.startswith(('http://', 'https://')):
+        raise ValueError('Only http:// and https:// URLs are allowed')
+    
+    # Get browser instance
+    browser_instance = get_browser()
+    if not browser_instance:
+        raise RuntimeError('Could not connect to Chrome debug instance')
+    
+    tab = None
     try:
-        data = request.get_json()
-        url = data.get('url')
-        
-        if not url:
-            return jsonify({'error': 'URL is required'}), 400
-        
-        # Ensure URL has a scheme
-        if not url.startswith(('http://', 'https://')):
-            url = 'https://' + url
-        
-        # Get browser instance
-        browser_instance = get_browser()
-        if not browser_instance:
-            return jsonify({'error': 'Could not connect to Chrome debug instance'}), 500
-        
         # Create a new tab
         tab = browser_instance.new_tab()
         
@@ -65,9 +63,28 @@ def load_url():
         result = tab.Runtime.evaluate(expression="document.documentElement.outerHTML")
         html_content = result.get('result', {}).get('value', '')
         
-        # Close the tab
-        tab.stop()
-        browser_instance.close_tab(tab)
+        return html_content
+    finally:
+        # Ensure cleanup always happens
+        if tab:
+            try:
+                tab.stop()
+                browser_instance.close_tab(tab)
+            except Exception:
+                pass  # Ignore cleanup errors
+
+
+@app.route('/load_url', methods=['POST'])
+def load_url():
+    """Load a URL in the remote Chrome instance and return the page content."""
+    try:
+        data = request.get_json()
+        url = data.get('url')
+        
+        if not url:
+            return jsonify({'error': 'URL is required'}), 400
+        
+        html_content = load_page_from_chrome(url)
         
         return jsonify({
             'success': True,
@@ -75,6 +92,8 @@ def load_url():
             'content': html_content
         })
         
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -86,46 +105,20 @@ def proxy_url():
     if not url:
         return "No URL provided", 400
     
-    # Ensure URL has a scheme
-    if not url.startswith(('http://', 'https://')):
-        url = 'https://' + url
-    
     try:
-        # Get browser instance
-        browser_instance = get_browser()
-        if not browser_instance:
-            return "Could not connect to Chrome debug instance", 500
-        
-        # Create a new tab
-        tab = browser_instance.new_tab()
-        
-        # Start the tab
-        tab.start()
-        
-        # Navigate to the URL
-        tab.Page.enable()
-        tab.Page.navigate(url=url)
-        
-        # Wait for page to load
-        tab.wait(5)
-        
-        # Get the page content
-        result = tab.Runtime.evaluate(expression="document.documentElement.outerHTML")
-        html_content = result.get('result', {}).get('value', '')
-        
-        # Close the tab
-        tab.stop()
-        browser_instance.close_tab(tab)
-        
+        html_content = load_page_from_chrome(url)
         return html_content
-        
+    except ValueError as e:
+        return f"Invalid URL: {str(e)}", 400
     except Exception as e:
         return f"Error loading page: {str(e)}", 500
 
 
 if __name__ == '__main__':
+    import os
+    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     app.run(
         host=config.FLASK_HOST,
         port=config.FLASK_PORT,
-        debug=True
+        debug=debug_mode
     )

@@ -173,10 +173,10 @@
     </div>
     
     <div class="content-area">
-        <div id="status-message" class="status-message"></div>
+        <div id="status-message" class="status-message" role="status" aria-live="polite"></div>
         
         <div id="iframe-container">
-            <iframe id="content-iframe" sandbox="allow-same-origin allow-scripts allow-forms"></iframe>
+            <iframe id="content-iframe" sandbox="allow-scripts" title="Loaded webpage content"></iframe>
         </div>
         
         <div id="instructions" class="instructions">
@@ -224,7 +224,12 @@
                 },
                 body: JSON.stringify({ url: url })
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.error) {
                     showStatus('Error: ' + data.error, 'error');
@@ -234,11 +239,20 @@
                     showStatus('Page loaded successfully!', 'success');
                     setTimeout(() => hideStatus(), 3000);
                     
+                    // Revoke previous blob URL if exists
+                    if (contentIframe.src && contentIframe.src.startsWith('blob:')) {
+                        URL.revokeObjectURL(contentIframe.src);
+                    }
+                    
                     // Create a blob URL for the content
                     const blob = new Blob([data.content], { type: 'text/html' });
                     const blobUrl = URL.createObjectURL(blob);
                     
-                    // Set iframe source
+                    // Set iframe source and revoke after load
+                    contentIframe.onload = function() {
+                        // Revoke the blob URL after iframe loads to free memory
+                        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+                    };
                     contentIframe.src = blobUrl;
                     iframeContainer.classList.add('visible');
                     

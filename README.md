@@ -12,7 +12,7 @@ Head for headless browser - A Python proxy server that connects to a remote Chro
 
 ## Prerequisites
 
-- Python 3.7 or higher
+- Python 3.8 or higher
 - Chrome/Chromium running with remote debugging enabled
 
 ## Installation
